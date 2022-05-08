@@ -15,7 +15,7 @@ use crate::utils::download_file;
 
 /// Data comes from https://docs.rs/teloxide/latest/teloxide/types/struct.MessageEntity.html
 #[derive(Debug)]
-pub struct MessageData<'a> {
+pub struct TelegramMessageData<'a> {
     /// Caption or text of the message
     pub text: Option<&'a str>,
     pub photos: Option<&'a [PhotoSize]>,
@@ -32,6 +32,11 @@ pub struct Attachment<'a> {
     pub file_id: String,
     _file_data: InMemoryFile<'a>,
     pub file_size: Option<u32>,
+}
+
+pub struct UnifiedMessage<'a> {
+    pub message_data: Vec<Attachment<'a>>,
+    pub message_text: Option<String>
 }
 
 impl<'a> TryInto<AttachmentType<'a>> for Attachment<'a> {
@@ -64,7 +69,6 @@ impl<'a> Attachment<'a> {
         bot: &AutoSend<Bot>,
     ) -> Result<&'a InMemoryFile<'a>, Box<dyn DynError + Send + Sync>> {
         if self._file_data.len() == 0 {
-        } else {
             let file: Cow<'a, [u8]> = download_file(&self.file_id, bot).await?;
             self._file_data = file;
         };

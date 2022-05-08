@@ -1,12 +1,16 @@
-use log::{debug, info};
+use log::debug;
 use std::collections::HashMap;
 use std::error::Error;
+use std::io;
 use std::path::Path;
 use teloxide::{dispatching::UpdateFilterExt, prelude::*, types::ChatId};
 use tokio::{fs::File, io::AsyncWriteExt};
 
-use crate::attachments::{get_audio_attachments, get_file_attachments, get_photo_attachments, get_video_attachments};
-use crate::types::{Attachment, MessageData};
+use crate::attachments::{
+    get_audio_attachments, get_file_attachments, get_photo_attachments, get_sticker_attachments,
+    get_video_attachments,
+};
+use crate::types::{Attachment, TelegramMessageData};
 
 mod attachments;
 mod types;
@@ -52,7 +56,7 @@ async fn message_handler(
     if let Some(_discord_id) = CHANNEL_DATA.get(&m.chat.id) {
         // Pulls required data off the message
         // See this: https://docs.rs/teloxide/latest/teloxide/prelude/struct.Message.html
-        let message_data = MessageData {
+        let message_data = TelegramMessageData {
             text: m.text(),
             photos: m.photo(),
             audio: m.audio(),
@@ -73,34 +77,45 @@ async fn message_handler(
         get_file_attachments(&message_data, &mut attachments)?;
 
         // Generate the sticker attachments
+        get_sticker_attachments(&message_data, &mut attachments)?;
 
         // Generate the video attachments
         get_video_attachments(&message_data, &mut attachments)?;
 
+        // Sort to start with the smallest files first
+        attachments.sort_by(|a, b| a.file_size.cmp(&b.file_size));
+
         // Test save all attachments
         for attachment in &mut attachments {
-            info!("Saving attachment: {:?}", &attachment.file_name);
-            let mut file =
-                File::create(Path::new("./text_media").join(&attachment.file_name)).await?;
-            let file_name = attachment.file_name.clone();
+            let path = Path::new("test_media").join(&attachment.file_name);
+            debug!("Saving file {}", path.display());
+            let mut file = File::create(&path).await?;
             let file_size = attachment.file_size;
             let data = attachment.download_file(&bot).await?;
 
             if let Some(file_size) = file_size {
                 debug!(
                     "Saving attachment: {:?}, downloaded {}/{} bytes",
-                    file_name,
+                    &path,
                     data.len(),
                     file_size
                 );
             } else {
                 debug!(
                     "Saving attachment: {:?}, downloaded {} bytes",
-                    file_name,
+                    &path,
                     data.len()
                 );
             }
-            file.write(data).await?;
+
+            if data.len() == 0 {
+                return Err(Box::new(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("File `{}` had no length", path.display()),
+                )));
+            }
+
+            file.write_all(data).await?;
         }
     }
     Ok(())

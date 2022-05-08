@@ -6,10 +6,10 @@ use std::{
 use log::debug;
 use mime_to_ext::MIME_DATA_MAP;
 
-use crate::types::{Attachment, MessageData};
+use crate::types::{Attachment, TelegramMessageData};
 
 pub fn get_audio_attachments(
-    message_data: &MessageData,
+    message_data: &TelegramMessageData,
     attachments: &mut Vec<Attachment>,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     if let Some(audio) = message_data.audio {
@@ -53,7 +53,7 @@ pub fn get_audio_attachments(
 }
 
 pub fn get_file_attachments(
-    message_data: &MessageData,
+    message_data: &TelegramMessageData,
     attachments: &mut Vec<Attachment>,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     if let Some(file) = message_data.file {
@@ -99,8 +99,35 @@ pub fn get_file_attachments(
     Ok(())
 }
 
+/// Stickers have no mime type, so we have to guess the file extension I guess
+pub fn get_sticker_attachments(
+    message_data: &TelegramMessageData,
+    attachments: &mut Vec<Attachment>,
+) -> Result<(), Box<dyn Error + Sync + Send>> {
+    if let Some(sticker) = message_data.sticker {
+        // Try to get the filename
+        let filename = if sticker.is_animated {
+            return Err(Box::new(io::Error::new(
+                ErrorKind::Other,
+                "Animated stickers are not supported yet",
+            )));
+            // format!("{}.tgs", sticker.file_unique_id)
+        } else if sticker.is_video {
+            format!("{}.webm", sticker.file_unique_id)
+        } else {
+            format!("{}.png", sticker.file_unique_id)
+        };
+        attachments.push(Attachment::new(
+            filename,
+            sticker.file_id.clone(),
+            sticker.file_size,
+        ));
+    }
+    Ok(())
+}
+
 pub fn get_video_attachments(
-    message_data: &MessageData,
+    message_data: &TelegramMessageData,
     attachments: &mut Vec<Attachment>,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     if let Some(video) = message_data.video {
@@ -151,7 +178,7 @@ pub fn get_video_attachments(
     Ok(())
 }
 
-pub fn get_photo_attachments(message_data: &MessageData, attachments: &mut Vec<Attachment>) {
+pub fn get_photo_attachments(message_data: &TelegramMessageData, attachments: &mut Vec<Attachment>) {
     if let Some(photo) = message_data.photos.and_then(|photos| photos.last()) {
         let filename = format!("{}.jpg", photo.file_unique_id);
 
