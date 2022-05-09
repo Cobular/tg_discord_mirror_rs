@@ -1446,6 +1446,7 @@ dependencies = [
  "lazy_static",
  "log",
  "mime_to_ext",
+ "once_cell",
  "pretty_env_logger",
  "serenity",
  "teloxide",

@@ -16,3 +16,4 @@ serenity = { version = "0.11", default-features = false, features = [
 ] }
 lazy_static = "1.4.0"
 mime_to_ext = { git = "https://github.com/Cobular/mime_to_ext.git", branch = "master" }
+once_cell = "1.10.0"

@@ -1,7 +1,7 @@
 use std::{
-    borrow::{Cow, Borrow},
+    borrow::{Borrow, Cow},
     error::Error as DynError,
-    io::{Error, ErrorKind},
+    // io::{Error, ErrorKind},
 };
 
 use serenity::model::channel::AttachmentType;
@@ -27,29 +27,39 @@ pub struct TelegramMessageData<'a> {
 
 pub type InMemoryFile<'a> = Cow<'a, [u8]>;
 
+#[derive(Clone)]
 pub struct Attachment<'a> {
     pub file_name: String,
     pub file_id: String,
-    _file_data: InMemoryFile<'a>,
+    pub file_data: Option<InMemoryFile<'a>>,
     pub file_size: Option<u32>,
 }
 
 pub struct UnifiedMessage<'a> {
     pub message_data: Vec<Attachment<'a>>,
-    pub message_text: Option<String>
+    pub message_text: Option<String>,
 }
 
-impl<'a> TryInto<AttachmentType<'a>> for Attachment<'a> {
-    type Error = Error;
+// impl<'a> TryInto<AttachmentType<'a>> for Attachment<'a> {
+//     type Error = Error;
 
-    fn try_into(self: Attachment<'a>) -> Result<AttachmentType<'a>, Error> {
-        if self._file_data.len() != 0 {
-            Ok(AttachmentType::Bytes {
-                data: self._file_data,
-                filename: self.file_name,
-            })
-        } else {
-            Err(Error::new(ErrorKind::Other, "No file data"))
+//     fn try_into(self: Attachment<'a>) -> Result<AttachmentType<'a>, Error> {
+//         if self._file_data.len() != 0 {
+//             Ok(AttachmentType::Bytes {
+//                 data: self._file_data,
+//                 filename: self.file_name,
+//             })
+//         } else {
+//             Err(Error::new(ErrorKind::Other, "No file data"))
+//         }
+//     }
+// }
+
+impl<'a> Into<AttachmentType<'a>> for Attachment<'a> {
+    fn into(self: Attachment<'a>) -> AttachmentType<'a> {
+        AttachmentType::Bytes {
+            data: self._file_data,
+            filename: self.file_name,
         }
     }
 }
@@ -59,20 +69,19 @@ impl<'a> Attachment<'a> {
         Self {
             file_name,
             file_id,
-            _file_data: Cow::from(Vec::new()),
-            file_size
+            file_size,
         }
     }
 
-    pub async fn download_file(
+    pub async fn get_file_if_needed(
         &'a mut self,
         bot: &AutoSend<Bot>,
-    ) -> Result<&'a InMemoryFile<'a>, Box<dyn DynError + Send + Sync>> {
-        if self._file_data.len() == 0 {
-            let file: Cow<'a, [u8]> = download_file(&self.file_id, bot).await?;
-            self._file_data = file;
+    ) -> Result<(), Box<dyn DynError + Send + Sync>> {
+        if self.file_data.is_none() {
+            let file: Cow<'a, [u8]> = download_file(&self.file_id, self.file_size, bot).await?;
+            self.file_data = Some(file);
         };
 
-        return Ok(self._file_data.borrow());
+        Ok(())
     }
 }
