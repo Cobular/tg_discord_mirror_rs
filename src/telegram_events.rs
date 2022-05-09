@@ -11,7 +11,7 @@ use tokio::io::AsyncWriteExt;
 
 use crate::attachments::{
     get_audio_attachments, get_file_attachments, get_photo_attachments, get_sticker_attachments,
-    get_video_attachments,
+    get_video_attachments, get_gif_attachments,
 };
 use crate::types::{MyResult, TelegramMessageData, UnifiedMessage};
 use crate::utils::send_all_webhooks;
@@ -37,6 +37,7 @@ pub async fn message_handler(m: Message) -> MyResult<()> {
             file: m.document(),
             sticker: m.sticker(),
             video: m.video(),
+            gif: m.animation()
         };
 
         let mut message: UnifiedMessage = UnifiedMessage {
@@ -71,6 +72,12 @@ pub async fn message_handler(m: Message) -> MyResult<()> {
         match get_video_attachments(&message_data) {
             Ok(video_attachments) => message.attachments.extend(video_attachments.into_iter()),
             Err(_) => warn!("Failed to parse video attachments"),
+        };
+
+        // Generate the sticker attachments
+        match get_gif_attachments(&message_data) {
+            Ok(gif_attachments) => message.attachments.extend(gif_attachments.into_iter()),
+            Err(_) => warn!("Failed to parse gif attachments"),
         };
 
         // Sort to start with the smallest files first

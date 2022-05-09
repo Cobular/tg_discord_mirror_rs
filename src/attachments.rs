@@ -182,6 +182,56 @@ pub fn get_video_attachments<'a>(
     Ok(attachments)
 }
 
+pub fn get_gif_attachments<'a>(
+    message_data: &TelegramMessageData<'a>,
+) -> MyResult<Vec<Attachment<'a>>> {
+    let mut attachments = Vec::new();
+
+    if let Some(gif) = message_data.gif{
+        // Try to get the filename
+        let filename = match &gif.file_name {
+            // Quick return if we have it
+            Some(filename) => {
+                debug!("Found video filename: {}", filename);
+                filename.to_owned()
+            }
+            None => {
+                // Otherwise, do a lott of work to get it
+                debug!("No filename found for video, trying to get it");
+                let file_ext = match gif.mime_type.clone() {
+                    Some(mime) => {
+                        let mime_type = format!("{}/{}", mime.type_(), mime.subtype());
+                        let ext = match MIME_DATA_MAP.get(&mime_type) {
+                            Some(mime_data) => mime_data.ext.as_str(),
+                            None => {
+                                return Err(make_error(&format!(
+                                    "Could not look up ext for gif mime type `{}`",
+                                    mime_type
+                                )));
+                            }
+                        };
+                        ext
+                    }
+                    None => {
+                        return Err(Box::new(io::Error::new(
+                            ErrorKind::Other,
+                            "Failed to get mime type for gif",
+                        )));
+                    }
+                };
+
+                format!("{}{}", gif.file_unique_id, file_ext)
+            }
+        };
+        attachments.push(Attachment::new(
+            filename,
+            gif.file_id.clone(),
+            gif.file_size,
+        ));
+    }
+    Ok(attachments)
+}
+
 pub fn get_photo_attachments<'a>(
     message_data: &TelegramMessageData<'a>,
 ) -> Option<Vec<Attachment<'a>>> {

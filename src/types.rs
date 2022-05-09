@@ -5,7 +5,7 @@ use std::{
 
 use serenity::model::channel::AttachmentType;
 use teloxide::{
-    types::{Audio, Document, PhotoSize, Sticker, Video},
+    types::{Audio, Document, PhotoSize, Sticker, Video, Animation},
 };
 use tokio::task::{self, JoinHandle};
 
@@ -21,6 +21,7 @@ pub struct TelegramMessageData<'a> {
     pub file: Option<&'a Document>,
     pub sticker: Option<&'a Sticker>,
     pub video: Option<&'a Video>,
+    pub gif: Option<&'a Animation>
 }
 
 pub type InMemoryFile<'a> = Cow<'a, [u8]>;
