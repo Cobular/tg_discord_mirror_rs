@@ -6,12 +6,16 @@ use std::{
 use log::debug;
 use mime_to_ext::MIME_DATA_MAP;
 
-use crate::types::{Attachment, TelegramMessageData};
+use crate::{
+    types::{Attachment, TelegramMessageData, MyResult},
+    utils::make_error,
+};
 
-pub fn get_audio_attachments(
-    message_data: &TelegramMessageData,
-    attachments: &mut Vec<Attachment>,
-) -> Result<(), Box<dyn Error + Sync + Send>> {
+pub fn get_audio_attachments<'a>(
+    message_data: &TelegramMessageData<'a>,
+) -> Result<Vec<Attachment<'a>>, Box<dyn Error + Sync + Send>> {
+    let mut attachments = Vec::new();
+
     if let Some(audio) = message_data.audio {
         let file_ext = match audio.mime_type.clone() {
             Some(mime) => {
@@ -49,13 +53,14 @@ pub fn get_audio_attachments(
             audio.file_size,
         ));
     }
-    Ok(())
+    Ok(attachments)
 }
 
-pub fn get_file_attachments(
-    message_data: &TelegramMessageData,
-    attachments: &mut Vec<Attachment>,
-) -> Result<(), Box<dyn Error + Sync + Send>> {
+pub fn get_file_attachments<'a>(
+    message_data: &TelegramMessageData<'a>,
+) -> Result<Vec<Attachment<'a>>, Box<dyn Error + Sync + Send>> {
+    let mut attachments = Vec::new();
+
     if let Some(file) = message_data.file {
         let file_ext = match file.mime_type.clone() {
             Some(mime) => {
@@ -96,14 +101,15 @@ pub fn get_file_attachments(
             file.file_size,
         ));
     }
-    Ok(())
+    Ok(attachments)
 }
 
 /// Stickers have no mime type, so we have to guess the file extension I guess
-pub fn get_sticker_attachments(
-    message_data: &TelegramMessageData,
-    attachments: &mut Vec<Attachment>,
-) -> Result<(), Box<dyn Error + Sync + Send>> {
+pub fn get_sticker_attachments<'a>(
+    message_data: &TelegramMessageData<'a>,
+) -> Result<Vec<Attachment<'a>>, Box<dyn Error + Sync + Send>> {
+    let mut attachments = Vec::new();
+
     if let Some(sticker) = message_data.sticker {
         // Try to get the filename
         let filename = if sticker.is_animated {
@@ -123,13 +129,14 @@ pub fn get_sticker_attachments(
             sticker.file_size,
         ));
     }
-    Ok(())
+    Ok(attachments)
 }
 
-pub fn get_video_attachments(
-    message_data: &TelegramMessageData,
-    attachments: &mut Vec<Attachment>,
-) -> Result<(), Box<dyn Error + Sync + Send>> {
+pub fn get_video_attachments<'a>(
+    message_data: &TelegramMessageData<'a>,
+) -> MyResult<Vec<Attachment<'a>>> {
+    let mut attachments = Vec::new();
+
     if let Some(video) = message_data.video {
         // Try to get the filename
         let filename = match &video.file_name {
@@ -147,12 +154,9 @@ pub fn get_video_attachments(
                         let ext = match MIME_DATA_MAP.get(&mime_type) {
                             Some(mime_data) => mime_data.ext.as_str(),
                             None => {
-                                return Err(Box::new(io::Error::new(
-                                    ErrorKind::Other,
-                                    format!(
-                                        "Could not look up ext for video mime type `{}`",
-                                        mime_type
-                                    ),
+                                return Err(make_error(&format!(
+                                    "Could not look up ext for video mime type `{}`",
+                                    mime_type
                                 )));
                             }
                         };
@@ -175,11 +179,15 @@ pub fn get_video_attachments(
             video.file_size,
         ));
     }
-    Ok(())
+    Ok(attachments)
 }
 
-pub fn get_photo_attachments(message_data: &TelegramMessageData, attachments: &mut Vec<Attachment>) {
+pub fn get_photo_attachments<'a>(
+    message_data: &TelegramMessageData<'a>,
+) -> Option<Vec<Attachment<'a>>> {
     if let Some(photo) = message_data.photos.and_then(|photos| photos.last()) {
+        let mut attachments = Vec::new();
+
         let filename = format!("{}.jpg", photo.file_unique_id);
 
         attachments.push(Attachment::new(
@@ -187,5 +195,8 @@ pub fn get_photo_attachments(message_data: &TelegramMessageData, attachments: &m
             photo.file_id.clone(),
             photo.file_size,
         ));
+
+        return Some(attachments);
     }
+    None
 }

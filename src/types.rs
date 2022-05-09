@@ -1,15 +1,13 @@
 use std::{
-    borrow::{Borrow, Cow},
+    borrow::Cow,
     error::Error as DynError,
-    // io::{Error, ErrorKind},
 };
 
 use serenity::model::channel::AttachmentType;
 use teloxide::{
-    adaptors::AutoSend,
     types::{Audio, Document, PhotoSize, Sticker, Video},
-    Bot,
 };
+use tokio::task::{self, JoinHandle};
 
 use crate::utils::download_file;
 
@@ -27,61 +25,57 @@ pub struct TelegramMessageData<'a> {
 
 pub type InMemoryFile<'a> = Cow<'a, [u8]>;
 
-#[derive(Clone)]
+pub type BoxedError = Box<dyn DynError + Send + Sync>;
+pub type MyResult<T> = Result<T, BoxedError>;
+
 pub struct Attachment<'a> {
     pub file_name: String,
     pub file_id: String,
-    pub file_data: Option<InMemoryFile<'a>>,
+    pub file_data: JoinHandle<MyResult<InMemoryFile<'a>>>,
     pub file_size: Option<u32>,
 }
 
 pub struct UnifiedMessage<'a> {
-    pub message_data: Vec<Attachment<'a>>,
+    pub attachments: Vec<Attachment<'a>>,
     pub message_text: Option<String>,
 }
-
-// impl<'a> TryInto<AttachmentType<'a>> for Attachment<'a> {
-//     type Error = Error;
-
-//     fn try_into(self: Attachment<'a>) -> Result<AttachmentType<'a>, Error> {
-//         if self._file_data.len() != 0 {
-//             Ok(AttachmentType::Bytes {
-//                 data: self._file_data,
-//                 filename: self.file_name,
-//             })
-//         } else {
-//             Err(Error::new(ErrorKind::Other, "No file data"))
-//         }
-//     }
-// }
-
-impl<'a> Into<AttachmentType<'a>> for Attachment<'a> {
-    fn into(self: Attachment<'a>) -> AttachmentType<'a> {
-        AttachmentType::Bytes {
-            data: self._file_data,
-            filename: self.file_name,
-        }
-    }
-}
-
 impl<'a> Attachment<'a> {
+    // Create a new file, starting the download but not joining it so we can download while doing other things.
     pub fn new(file_name: String, file_id: String, file_size: Option<u32>) -> Self {
+
+        let cloned_file_id = file_id.clone();
+        let future = task::spawn(async move {
+            download_file(cloned_file_id, file_size).await
+        });
+
         Self {
             file_name,
             file_id,
             file_size,
+            file_data: future,
         }
     }
 
-    pub async fn get_file_if_needed(
-        &'a mut self,
-        bot: &AutoSend<Bot>,
-    ) -> Result<(), Box<dyn DynError + Send + Sync>> {
-        if self.file_data.is_none() {
-            let file: Cow<'a, [u8]> = download_file(&self.file_id, self.file_size, bot).await?;
-            self.file_data = Some(file);
-        };
+    pub async fn to_discord_attachment(self: Attachment<'a>) -> MyResult<AttachmentType<'a>> {
+        Ok(AttachmentType::Bytes {
+            filename: self.file_name.clone(),
+            data: self.get_file_or_wait().await?,
+        })
+    }
 
-        Ok(())
+    pub async fn get_file_or_wait(
+        self,
+    ) -> MyResult<Cow<'a, [u8]>> {
+        let task_result = self.file_data.await;
+
+        match task_result {
+            Ok(request_result) => {
+                match request_result {
+                    Ok(file_data) => Ok(file_data),
+                    Err(err) => Err(err),
+                }
+            }
+            Err(e) => Err(Box::new(e)),
+        }
     }
 }

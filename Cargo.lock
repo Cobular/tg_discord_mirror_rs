@@ -1443,6 +1443,7 @@ dependencies = [
 name = "tg_discord_mirror"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "lazy_static",
  "log",
  "mime_to_ext",
