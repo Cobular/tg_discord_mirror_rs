@@ -1,7 +1,7 @@
 use std::{borrow::Cow, error::Error, io};
 
 use futures::future;
-use log::{debug, warn, info};
+use log::{debug, info, warn};
 use serenity::{
     http,
     model::{channel::AttachmentType, webhook::Webhook},
@@ -79,13 +79,11 @@ pub async fn send_all_webhooks<'a>(
     let discord_attachments: Vec<_> = future::join_all(discord_attachment)
         .await
         .into_iter()
-        .filter_map(|attachment| {
-            match attachment {
-                Ok(attachment) => Some(attachment),
-                Err(_) => {
-                    warn!("Failed to convert attachment to discord attachment");
-                    None
-                },
+        .filter_map(|attachment| match attachment {
+            Ok(attachment) => Some(attachment),
+            Err(_) => {
+                warn!("Failed to convert attachment to discord attachment");
+                None
             }
         })
         .collect();

@@ -10,19 +10,19 @@ use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 
 use crate::attachments::{
-    get_audio_attachments, get_file_attachments, get_photo_attachments, get_sticker_attachments,
-    get_video_attachments, get_gif_attachments,
+    get_audio_attachments, get_file_attachments, get_gif_attachments, get_photo_attachments,
+    get_sticker_attachments, get_video_attachments,
 };
 use crate::types::{MyResult, TelegramMessageData, UnifiedMessage};
 use crate::utils::send_all_webhooks;
-use crate::{CHANNEL_DATA, WEBHOOK};
+use crate::{CHANNEL_DATA};
 
 /// Parse the text wrote on Telegram and check if that text is a valid command
 /// or not, then match the command. If the command is `/start` it writes a
 /// markup with the `InlineKeyboardMarkup`.
 pub async fn message_handler(m: Message) -> MyResult<()> {
     // Gets the discord webhook data if the chat is one of the tracked channels
-    if let Some(_discord_id) = CHANNEL_DATA.get(&m.chat.id) {
+    if let Some(discord_channel) = CHANNEL_DATA.read().get(&m.chat.id) {
         // Pulls required data off the message
         // See this: https://docs.rs/teloxide/latest/teloxide/prelude/struct.Message.html
         let text = if m.text().is_none() {
@@ -37,14 +37,13 @@ pub async fn message_handler(m: Message) -> MyResult<()> {
             file: m.document(),
             sticker: m.sticker(),
             video: m.video(),
-            gif: m.animation()
+            gif: m.animation(),
         };
 
         let mut message: UnifiedMessage = UnifiedMessage {
             attachments: Vec::new(),
             message_text: text.map(|s| s.to_string()),
         };
-
 
         // Generate the photo attachments
         if let Some(photo_attachment) = get_photo_attachments(&message_data) {
@@ -89,7 +88,7 @@ pub async fn message_handler(m: Message) -> MyResult<()> {
         // _download_attachments(&message).await?;
 
         // Fire the webhooks
-        send_all_webhooks(message, WEBHOOK.get().unwrap()).await?;
+        send_all_webhooks(message, &discord_channel.webhook).await?;
     }
     Ok(())
 }
