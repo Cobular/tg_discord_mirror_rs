@@ -1,8 +1,8 @@
 use once_cell::sync::OnceCell;
 use serenity::{http, model::webhook::Webhook};
-use std::collections::HashMap;
+use std::{collections::HashMap, env::var};
 use tokio::runtime::Runtime;
-
+use dotenv::dotenv;
 use teloxide::{dispatching::UpdateFilterExt, prelude::*, types::ChatId};
 
 use crate::telegram_events::message_handler;
@@ -25,6 +25,8 @@ lazy_static! {
     static ref HTTP: serenity::http::client::Http = {
         http::Http::new("e")
     };
+    static ref AVATAR_URL: String = var("BOT_ICON").unwrap_or_else(|_| "https://discord.com/assets/1f0bfc0865d324c2587920a7d80c609b.png".to_string());
+    static ref USERNAME: String = var("BOT_USERNAME").unwrap_or_else(|_| "Telegram Discord Mirror Bot".to_string());
 }
 
 static WEBHOOK: OnceCell<Webhook> = OnceCell::new();
@@ -32,6 +34,7 @@ static RUNTIME: OnceCell<Runtime> = OnceCell::new();
 static BOT: OnceCell<AutoSend<Bot>> = OnceCell::new();
 
 fn main() {
+    dotenv().ok();
     pretty_env_logger::init();
     log::info!("Starting the runtime...");
 
@@ -46,9 +49,11 @@ fn main() {
 }
 
 async fn async_main() {
+    let webhook_url = var("WEBHOOK_URL").unwrap();
+
     let webhook = HTTP
         .get_webhook_from_url(
-            "https://discord.com/api/webhooks/973288685242040351/iuMJRUsKk-j7dmmHLp4B78zSaKYJE6BGudFv9oYBpmI_bcFMLYSryBP4M61LeiszwqHn",
+            webhook_url.as_str(),
         )
         .await
         .unwrap();

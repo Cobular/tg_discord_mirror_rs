@@ -57,7 +57,7 @@ pub async fn send_one_webhook<'a>(
             for file in attachment_slice {
                 hook.add_file(file);
             }
-            hook
+            hook.avatar_url("avatar_url").username("")
         })
         .await?;
 
