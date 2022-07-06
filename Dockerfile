@@ -1,4 +1,5 @@
 FROM rust:slim-buster AS chef 
+RUN apt-get update && apt-get install -y pkg-config libssh-dev cmake
 # We only pay the installation cost once, 
 # it will be cached from the second build onwards
 RUN cargo install cargo-chef 
@@ -20,5 +21,8 @@ RUN cargo build --release
 # We do not need the Rust toolchain to run the binary!
 FROM debian:buster-slim AS runtime
 WORKDIR /app
-COPY --from=builder /app/target/release/discord_channel_mirror_rs /usr/local/bin
-ENTRYPOINT ["/usr/local/bin/app"]
+RUN apt-get update \
+ && apt-get install --no-install-recommends --yes libssh-dev \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/target/release/tg_discord_mirror /usr/local/bin
+ENTRYPOINT ["/usr/local/bin/tg_discord_mirror"]

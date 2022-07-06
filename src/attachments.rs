@@ -7,7 +7,7 @@ use log::debug;
 use mime_to_ext::MIME_DATA_MAP;
 
 use crate::{
-    types::{Attachment, TelegramMessageData, MyResult},
+    types::{Attachment, MyResult, TelegramMessageData},
     utils::make_error,
 };
 
@@ -187,7 +187,7 @@ pub fn get_gif_attachments<'a>(
 ) -> MyResult<Vec<Attachment<'a>>> {
     let mut attachments = Vec::new();
 
-    if let Some(gif) = message_data.gif{
+    if let Some(gif) = message_data.gif {
         // Try to get the filename
         let filename = match &gif.file_name {
             // Quick return if we have it

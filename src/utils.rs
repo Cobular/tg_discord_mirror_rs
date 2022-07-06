@@ -1,7 +1,7 @@
 use std::{borrow::Cow, error::Error, io};
 
 use futures::future;
-use log::{debug, warn, info};
+use log::{debug, info, warn};
 use serenity::{
     http,
     model::{channel::AttachmentType, webhook::Webhook},
@@ -9,8 +9,8 @@ use serenity::{
 use teloxide::{net::Download, prelude::*};
 
 use crate::{
-    types::{InMemoryFile, UnifiedMessage},
-    BOT,
+    types::{InMemoryFile, UnifiedMessage, WebhookData},
+    BOT, HTTP,
 };
 
 /// Download a file given it's file ID and a bot instance
@@ -44,11 +44,11 @@ pub async fn download_file<'a>(
 pub async fn send_one_webhook<'a>(
     message_text: Option<String>,
     attachment_slice: Vec<AttachmentType<'a>>,
-    webhook: &Webhook,
+    webhook: &WebhookData,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let http = http::Http::new("e");
 
-    webhook
+    webhook.raw_webhook
         .execute(http, true, |hook| {
             let hook = match message_text {
                 Some(text) => hook.content(text),
@@ -57,7 +57,8 @@ pub async fn send_one_webhook<'a>(
             for file in attachment_slice {
                 hook.add_file(file);
             }
-            hook.avatar_url("avatar_url").username("")
+            hook.avatar_url(&webhook.icon_url)
+                .username(&webhook.webhook_username)
         })
         .await?;
 
@@ -67,7 +68,7 @@ pub async fn send_one_webhook<'a>(
 /// Coordinate sending many webhooks if we need to to fit under the filesize limit
 pub async fn send_all_webhooks<'a>(
     attachments: UnifiedMessage<'a>,
-    webhook: &Webhook,
+    webhooks: &[WebhookData],
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // Create the vec of pending downloads
     let discord_attachment = attachments
@@ -76,23 +77,28 @@ pub async fn send_all_webhooks<'a>(
         .map(|attachment| attachment.to_discord_attachment());
 
     // wait for all to finish and discard the mistakes
-    let discord_attachments: Vec<_> = future::join_all(discord_attachment)
+    let discord_attachments: Vec<AttachmentType> = future::join_all(discord_attachment)
         .await
         .into_iter()
-        .filter_map(|attachment| {
-            match attachment {
-                Ok(attachment) => Some(attachment),
-                Err(_) => {
-                    warn!("Failed to convert attachment to discord attachment");
-                    None
-                },
+        .filter_map(|attachment| match attachment {
+            Ok(attachment) => Some(attachment),
+            Err(_) => {
+                warn!("Failed to convert attachment to discord attachment");
+                None
             }
         })
         .collect();
 
     if attachments.message_text.is_some() || !discord_attachments.is_empty() {
-        send_one_webhook(attachments.message_text, discord_attachments, webhook).await?;
-        info!("Sent webhook");
+        for webhook in webhooks {
+            send_one_webhook(
+                attachments.message_text.clone(),
+                discord_attachments.clone(),
+                webhook,
+            )
+            .await?;
+            info!("Sent one webhook");
+        }
     } else {
         warn!("No message text or attachments to send, didn't send webhook");
     }
@@ -103,4 +109,8 @@ pub async fn send_all_webhooks<'a>(
 #[inline]
 pub fn make_error(message: &str) -> Box<dyn Error + Send + Sync> {
     Box::new(io::Error::new(io::ErrorKind::Other, message.to_string()))
+}
+
+pub async fn make_webhook(webhook_url: &str) -> Result<Webhook, Box<dyn Error + Send + Sync>> {
+    Ok(HTTP.get_webhook_from_url(webhook_url).await.unwrap())
 }
